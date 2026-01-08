@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yerin's Spelling Master (Auto)</title>
+    <style>
+        :root { --primary: #ff69b4; --secondary: #00bcd4; --accent: #ff4081; }
+        body { font-family: 'Arial', sans-serif; background-color: #fffafb; display: flex; flex-direction: column; align-items: center; padding: 10px; margin: 0; }
+        .app-container { background: white; width: 100%; max-width: 480px; border-radius: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 8px solid var(--primary); overflow: hidden; position: relative; min-height: 580px; }
+        .header { background: var(--primary); padding: 15px; text-align: center; color: white; font-weight: bold; font-size: 1.2rem; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; }
+        .nav-tabs { display: flex; background: #f8f8f8; }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; font-weight: bold; font-size: 0.85rem; color: #888; border-bottom: 4px solid transparent; }
+        .tab.active { background: white; color: var(--primary); border-bottom-color: var(--primary); }
+        .content { padding: 30px; text-align: center; min-height: 400px; display: flex; flex-direction: column; justify-content: center; }
+        .date-btn { background: #fff; border: 2px solid var(--primary); padding: 20px; border-radius: 15px; font-size: 1.2rem; font-weight: bold; color: var(--primary); cursor: pointer; margin-bottom: 12px; width: 100%; }
+        .input-box { width: 90%; font-size: 32px; text-align: center; padding: 15px; border: 3px solid #eee; border-radius: 15px; text-transform: lowercase; outline: none; }
+        .btn-group { display: flex; gap: 10px; margin-top: 25px; flex-wrap: wrap; }
+        .btn { flex: 1; padding: 15px; border-radius: 12px; border: none; font-size: 1rem; cursor: pointer; color: white; font-weight: bold; }
+        .btn-blue { background: var(--secondary); }
+        .btn-green { background: #4caf50; }
+        .btn-orange { background: #ff9800; }
+        .btn-mic { background: #673ab7; }
+        #status-msg { font-size: 18px; color: #888; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <span>Yerin's Master</span>
+        <button onclick="location.reload()" style="background:none; border:none; color:white; font-size:22px; cursor:pointer;">🔄</button>
+    </div>
+    <div id="main-nav" class="nav-tabs" style="display:none;">
+        <div class="tab active" onclick="changeMode(1)">Step 1</div>
+        <div class="tab" onclick="changeMode(2)">Step 2</div>
+        <div class="tab" onclick="changeMode(3)">Step 3</div>
+    </div>
+    <div class="content" id="app-content">
+        <div id="status-msg">Loading Words for Yerin... 🌸</div>
+    </div>
+</div>
+
+<script>
+    // ✅ 어머님께서 성공하신 실시간 연동 주소입니다!
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ78hDvwl6TPmWdV0TwhHjjlEOJ4wexriVpqj_lcqS5Hw286LMWwyVycRpbvjUKt3pbSJ675AVHijhgB/pub?output=csv";
+
+    let allData = {}; let words = []; let mode = 1; let idx = 0; let selDate = "";
+
+    async function loadData() {
+        const status = document.getElementById('status-msg');
+        try {
+            const resp = await fetch(CSV_URL);
+            if (!resp.ok) throw new Error();
+            const text = await resp.text();
+            
+            // 데이터 분석
+            const rows = text.split(/\r?\n/).filter(r => r.trim() !== "").slice(1);
+            allData = {};
+            rows.forEach(r => {
+                const c = r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                if (c.length >= 4) {
+                    const date = c[0].replace(/"/g, '').trim();
+                    if (!allData[date]) allData[date] = [];
+                    allData[date].push({
+                        word: c[1].replace(/"/g, '').trim().toLowerCase(),
+                        def: c[2].replace(/"/g, '').trim(),
+                        sent: c[3].replace(/"/g, '').trim()
+                    });
+                }
+            });
+
+            if (Object.keys(allData).length === 0) {
+                status.innerHTML = "⚠️ No words found! <br> Check your sheet data.";
+            } else {
+                showDates();
+            }
+        } catch (e) {
+            status.innerHTML = "❌ Connection Failed! <br><br> Please check the sheet settings.";
+        }
+    }
+
+    function showDates() {
+        const cont = document.getElementById('app-content');
+        document.getElementById('main-nav').style.display = "none";
+        let html = '<h3 style="color:#ff69b4;">Pick a date!</h3>';
+        Object.keys(allData).forEach(d => {
+            if(d) html += `<button class="date-btn" onclick="start('${d}')">${d} ➔</button>`;
+        });
+        cont.innerHTML = html;
+    }
+
+    function start(d) {
+        selDate = d; words = [...allData[d]];
+        document.getElementById('main-nav').style.display = "flex";
+        changeMode(1);
+    }
+
+    function changeMode(m) {
+        mode = m; idx = 0;
+        if (m === 3) words.sort(() => Math.random() - 0.5);
+        else words = [...allData[selDate]];
+        document.querySelectorAll('.tab').forEach((t, i) => t.className = (i+1 === m) ? 'tab active' : 'tab');
+        render();
+    }
+
+    function speak(t, cb) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(t);
+        u.lang = 'en-US'; u.rate = 0.8;
+        if (cb) u.onend = cb;
+        window.speechSynthesis.speak(u);
+    }
+
+    function startVoice() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return alert("Mic not supported.");
+        const rec = new SpeechRecognition();
+        rec.lang = 'en-US';
+        rec.onstart = () => { document.getElementById('res').innerText = "Listening... 🎤"; };
+        rec.onresult = (e) => {
+            let res = e.results[0][0].transcript.toLowerCase().replace(/[\s\.]/g, '');
+            document.getElementById('ans').value = res;
+            check();
+        };
+        rec.start();
+    }
+
+    function render() {
+        const cont = document.getElementById('app-content');
+        const item = words[idx];
+        if (mode === 1) {
+            cont.innerHTML = `<h1 style="color:#ff4081;font-size:48px;">${item.word}</h1><p style="font-size:22px;font-weight:bold;">${item.def}</p><p style="font-style:italic;color:#666;border-top:1px solid #eee;padding-top:10px;">${item.sent}</p><div class="btn-group"><button class="btn btn-blue" onclick="speak('${item.word}', ()=>setTimeout(()=>speak('${item.def}'),500))">🔊 Listen</button><button class="btn btn-orange" onclick="idx=(idx+1)%words.length;render()">Next ▶</button></div>`;
+            speak(item.word);
+        } else {
+            cont.innerHTML = `<p style="font-size:24px; font-weight:bold;">"${item.def}"</p><input type="text" id="ans" class="input-box" placeholder="..." autocomplete="off"><div id="res" style="margin:15px; font-weight:bold; min-height:25px;"></div><div class="btn-group"><button class="btn btn-blue" onclick="speak('${item.def}')">🔊 Hint</button><button class="btn btn-mic" onclick="startVoice()">🎤 Say It</button><button class="btn btn-green" onclick="check()">Check ✅</button></div><button id="next-b" class="btn btn-orange" style="width:100%; display:none; background:#ff9800; margin-top:15px;" onclick="idx=(idx+1)%words.length;render()">Next ▶</button>`;
+        }
+    }
+
+    function check() {
+        const val = document.getElementById('ans').value.toLowerCase().trim();
+        const msg = document.getElementById('res');
+        if (val === words[idx].word) {
+            msg.innerText = "🎊 Perfect! 🎊"; msg.style.color = "#4caf50";
+            speak("Excellent!"); document.getElementById('next-b').style.display = "block";
+        } else {
+            msg.innerText = "Try again! 💪"; msg.style.color = "#ff4081";
+        }
+    }
+
+    window.onload = loadData;
+</script>
+</body>
+</html>
